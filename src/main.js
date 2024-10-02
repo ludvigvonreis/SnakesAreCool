@@ -1,38 +1,50 @@
-import { distance } from "./helpers";
+import { GameState } from "./gameState";
+import { distance, randRange } from "./helpers";
 import { ParticleGroup } from "./particle";
 
 const canvas = document.getElementById("snek");
 const ctx = canvas.getContext("2d");
+
+
 const width = 500;
 const height = 500;
+const gridSize = 20;
+
+const heightOffset = 3; // gridsizes
+const gameWidth = width;
+const gameHeight = height - heightOffset * gridSize;
+
+
 const ratio = window.devicePixelRatio;
 const EXPEREMENTALSIZECHANGE = false;
+const gameState = new GameState(
+	"score-text", "highscore-text", "reset-button", "modal-score-text", "modal-highscore-text", "menu-modal"
+);
 
 
 let lastTime = new Date().getTime();
 let currentTime = 0;
 let delta = 0;
-let isGameRunning = true;
 let aliveParticles = [];
 
 // Snake stuff
 const snake = {
-	x: 20,
-	y: 20,
+	x: 60,
+	y: 12 * gridSize,
 	dx: 0,
 	dy: 0,
 	speed: 2.5, // must add to even number
-	size: 20,
+	size: gridSize,
 	tail: 0,
 	history: [],
 	color: "#2878fa",
 };
 
 const food = {
-	x: 0,
-	y: 0,
-	size: 20,
-	eaten: true,
+	x: 18 * gridSize,
+	y: 12 * gridSize,
+	size: gridSize,
+	eaten: false,
 	color: "#eb3d34",
 	sprite: new Image(),
 };
@@ -41,27 +53,28 @@ const player = {
 	keyQueue: "None",
 	lastMove: "None",
 	queueChanged: false,
-	score: 0,
 };
 
 function reset() {
-	if (isGameRunning == true) return;
-
 	snake.history = [];
 	snake.tail = 0;
-	snake.x = 20;
-	snake.y = 20,
+	snake.x = 60;
+	snake.y = 12 * gridSize,
 	snake.dx = 0;
 	snake.dy = 0;
 
 
-	food.eaten = true;
+	food.eaten = false;
+	food.x = 18 * gridSize;
+	food.y = 12 * gridSize;
 	player.score = 0;
 	player.keyQueue = "None"
 	player.lastMove = "None"
 	player.queueChanged = false;
-	isGameRunning = true;
 	aliveParticles = [];
+
+
+	gameState.reset();
 }
 
 function init() {
@@ -88,7 +101,7 @@ function init() {
 
 function gameLoop() {
 	const internalGameLoop = () => {
-		if (isGameRunning == false) return;
+		if (gameState.shouldReset == true) reset();
 
 		requestAnimationFrame(internalGameLoop);
 
@@ -102,23 +115,30 @@ function gameLoop() {
 		// Spawn food if it has been eaten
 		spawnNewFood();
 
-		// Update snake history (tail)
-		if (snake.history.length < snake.tail) {
-			snake.history.push([snake.x, snake.y, snake.dx, snake.dy]);
-		} else {
-			snake.history.shift();
-		}
+		
+		if (gameState.isGamePaused == false) {
 
-		// Add velocity to snake position
-		snake.x += snake.dx * snake.speed;
-		snake.y += snake.dy * snake.speed;
+			// Update snake history (tail)
+			if (snake.history.length < snake.tail) {
+				snake.history.push([snake.x, snake.y, snake.dx, snake.dy]);
+			} else {
+				snake.history.shift();
+			}
 
-		// Keep snake within canvas bounds.
-		let touchedBorder = false;
-		[snake.x, snake.y, touchedBorder] = keepWithinBounds(snake.x, snake.y);
 
-		// If snake touches border: game over.
-		if (touchedBorder) gameOver();
+			// Add velocity to snake position
+			snake.x += snake.dx * snake.speed;
+			snake.y += snake.dy * snake.speed;
+
+
+			// Keep snake within canvas bounds.
+			let touchedBorder = false;
+			[snake.x, snake.y, touchedBorder] = keepWithinBounds(snake.x, snake.y);
+	
+			// If snake touches border: game over.
+			if (touchedBorder) gameOver();
+		};
+
 
 		// If snake touches itself: game over,
 		if (snakeCollidesWithTail() == true) gameOver();
@@ -128,8 +148,10 @@ function gameLoop() {
 			food.eaten = true;
 			snake.tail += 5; // to account for the tail not actually being 1 grid size big
 			aliveParticles.push(new ParticleGroup(food.x, food.y, 45));
-			player.score += 1;
+			gameState.score += 1;
 		}
+
+		gameState.tick();
 
 		// Render current frame
 		render();
@@ -141,14 +163,12 @@ function gameLoop() {
 }
 
 function gameOver() {
-	isGameRunning = false;
-	console.log("Kill yourself. NOW!!!");
-	reset();
+	gameState.onGameOver();
 }
 
 function render() {
 	// Clear screen
-	ctx.fillStyle = "#757575";
+	ctx.fillStyle = "#81bf43";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 	// Define two shades of green
@@ -156,7 +176,7 @@ function render() {
 	const darkGreen = "#99e65b"; // darker green color
 
 	// Loop over the canvas and fill each grid cell with alternating colors
-	for (let row = 0; row < height / snake.size; row++) {
+	for (let row = 3; row < height / snake.size; row++) {
 		for (let col = 0; col < width / snake.size; col++) {
 			// Calculate the x and y position for each grid cell
 			const x = col * snake.size;
@@ -224,6 +244,8 @@ function render() {
 }
 
 function handleInput() {
+	if (gameState.isGamePaused == true) return;
+
 	if (snake.y % snake.size == 0) {
 		switch (player.keyQueue) {
 			case "ArrowLeft": {
@@ -272,11 +294,13 @@ function handleInput() {
 }
 
 function spawnNewFood() {
+	if (gameState.isGamePaused == true) return;
+
 	if (food.eaten) {
 		let invalid = false;
 		while (true) {
-			food.x = Math.random() * width;
-			food.y = Math.random() * height;
+			food.x = randRange(width - gameWidth, gameWidth);
+			food.y = randRange(height - gameHeight, gameHeight);
 
 			food.x = Math.floor(food.x / food.size) * food.size;
 			food.y = Math.floor(food.y / food.size) * food.size;
@@ -297,6 +321,8 @@ function spawnNewFood() {
 }
 
 function snakeCollidesWithFood() {
+	if (gameState.isGamePaused == true) return;
+
 	if (distance(snake.x - food.x, snake.y - food.y) < 10) {
 		return true;
 	} else {
@@ -305,11 +331,13 @@ function snakeCollidesWithFood() {
 }
 
 function keepWithinBounds(x, y) {
-	let boundedX = Math.max(Math.min(x, width - snake.size), 0);
-	let boundedY = Math.max(Math.min(y, height - snake.size), 0);
+	if (gameState.isGamePaused == true) return;
 
-	let touchedBorderX = x > width - snake.size || x < 0;
-	let touchedBorderY = y > height - snake.size || y < 0;
+	let boundedX = Math.max(Math.min(x, width - snake.size), width - gameWidth);
+	let boundedY = Math.max(Math.min(y, height - snake.size), height - gameHeight);
+
+	let touchedBorderX = x > width - snake.size || x < width - gameWidth;
+	let touchedBorderY = y > height - snake.size || y < height - gameHeight;
 
 	let touchedBorder = touchedBorderX || touchedBorderY;
 
@@ -317,6 +345,8 @@ function keepWithinBounds(x, y) {
 }
 
 function snakeCollidesWithTail() {
+	if (gameState.isGamePaused == true) return;
+
 	for (const tail of snake.history) {
 		let dist = distance(Math.abs(snake.x - tail[0]), Math.abs(snake.y - tail[1]));
 		if (dist < 1) {
