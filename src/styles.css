@@ -1,0 +1,23 @@
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body {
+	background-color: #121212;
+}
+
+#app {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	padding-top: 2rem;
+}
+
+
+canvas {
+	width: 50vw;
+	aspect-ratio: 1 / 1;
+	border-radius: 1rem;
+}
