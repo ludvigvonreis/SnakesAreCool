@@ -1,5 +1,5 @@
 import { GameState } from "./gameState";
-import { distance, randRange } from "./helpers";
+import { distance, isColliding, randRange } from "./helpers";
 import { ParticleGroup } from "./particle";
 
 const canvas = document.getElementById("snek");
@@ -114,9 +114,8 @@ function gameLoop() {
 
 		// Spawn food if it has been eaten
 		spawnNewFood();
-
 		
-		if (gameState.isGamePaused == false) {
+		if (gameState.isGameOver == false && gameState.isGamePaused == false) {
 
 			// Update snake history (tail)
 			if (snake.history.length < snake.tail) {
@@ -244,8 +243,6 @@ function render() {
 }
 
 function handleInput() {
-	if (gameState.isGamePaused == true) return;
-
 	if (snake.y % snake.size == 0) {
 		switch (player.keyQueue) {
 			case "ArrowLeft": {
@@ -294,8 +291,6 @@ function handleInput() {
 }
 
 function spawnNewFood() {
-	if (gameState.isGamePaused == true) return;
-
 	if (food.eaten) {
 		let invalid = false;
 		while (true) {
@@ -306,7 +301,21 @@ function spawnNewFood() {
 			food.y = Math.floor(food.y / food.size) * food.size;
 
 			for (const tail of snake.history) {
-				if (tail[0] == food.x && tail[1] == food.y) {
+				let rect1 = {
+					x: tail[0],
+					y: tail[1],
+					width: snake.size,
+					height: snake.size,
+				}
+
+				let rect2 = {
+					x: food.x,
+					y: food.y,
+					width: snake.size,
+					height: snake.size,
+				}
+				
+				if (isColliding(rect1, rect2)) {
 					invalid = true;
 					break;
 				} else {
@@ -321,8 +330,6 @@ function spawnNewFood() {
 }
 
 function snakeCollidesWithFood() {
-	if (gameState.isGamePaused == true) return;
-
 	if (distance(snake.x - food.x, snake.y - food.y) < 10) {
 		return true;
 	} else {
@@ -331,8 +338,6 @@ function snakeCollidesWithFood() {
 }
 
 function keepWithinBounds(x, y) {
-	if (gameState.isGamePaused == true) return;
-
 	let boundedX = Math.max(Math.min(x, width - snake.size), width - gameWidth);
 	let boundedY = Math.max(Math.min(y, height - snake.size), height - gameHeight);
 
@@ -349,7 +354,7 @@ function snakeCollidesWithTail() {
 
 	for (const tail of snake.history) {
 		let dist = distance(Math.abs(snake.x - tail[0]), Math.abs(snake.y - tail[1]));
-		if (dist < 1) {
+		if (dist <= 2) {
 			return true;
 		}
 	}
